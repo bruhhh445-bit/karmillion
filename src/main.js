@@ -41,6 +41,12 @@ let stockBuyMode = 1;      // 1 | 10 | 100 | 'max'
 let modalKind = '';        // e.g. 'stock:BYTE', 'episode', 'event'
 let lastNews = '';
 const TABS = ['biz', 'market', 'assets', 'casino', 'story'];
+const sessionStart = Date.now();
+const LUCKY_CD = 4 * 60000;          // Lucky cash cooldown
+const BAG_EVERY = 100000;            // a money bag drops every ~100 s
+let bagUntil = 0, nextBag = Date.now() + 45000;
+const adBtn = (label, attrs = '', extra = '') => `<button class="btn ad ${extra}" ${attrs}><span class="ad-play">▶</span><span class="ad-txt">${label}</span></button>`;
+const tierBonus = (ti) => Math.min(minutesOfIncome(5, TIERS[ti].at * 0.1), TIERS[ti].at * 0.5);
 const cashText = smoothCounter((v) => money(v));
 const worthText = smoothCounter((v) => money(v));
 
@@ -119,7 +125,8 @@ function renderShell() {
 
     <button class="hero-btn" id="heroBtn" aria-label="Tap to earn money"></button>
     <div id="floaters"></div>
-    <button class="boost" data-act="boost"><span class="boost-ico">▶</span><span><b>×2 income</b><small>${BOOST_MINUTES} min</small></span></button>
+    <button class="bag" id="bag" data-act="bag" hidden aria-label="Free money bag"><span class="bag-ico">💰</span><span class="bag-tag">FREE</span></button>
+    <button class="boost" data-act="boost"><span class="ad-play">▶</span><span><b id="boostTitle">×2 INCOME</b><small id="boostSub">${BOOST_MINUTES} min · watch ad</small></span></button>
   </section>
 
   <div class="sheet-wrap">
@@ -148,7 +155,7 @@ function renderShell() {
   $('#heroBtn').addEventListener('pointerdown', onTap);
   $('#tabs').addEventListener('click', (e) => {
     const b = e.target.closest('button[data-tab]');
-    if (b && b.dataset.tab !== tab) { haptic('light'); showTab(b.dataset.tab, true); }
+    if (b && b.dataset.tab !== tab) { haptic('light'); showTab(b.dataset.tab, true); tabInterstitial(); }
   });
   $('#app').addEventListener('click', onAction);
 }
@@ -206,6 +213,14 @@ function frame() {
   const b = boosted();
   $('#boostBadge').hidden = !b;
   if (b) $('#boostLeft').textContent = fmtTime((S.boostUntil - Date.now()) / 1000);
+  $('#boostTitle').textContent = b ? `×2 ON · ${fmtTime((S.boostUntil - Date.now()) / 1000)}` : '×2 INCOME';
+  $('#boostSub').textContent = b ? `+${BOOST_MINUTES} min more` : `${BOOST_MINUTES} min · watch ad`;
+  const bagEl = $('#bag');
+  const nowMs = Date.now();
+  if (bagEl.hidden && nowMs > nextBag && S.introDone && !(S.tut && S.tut < 9)) {
+    bagUntil = nowMs + 30000; nextBag = nowMs + BAG_EVERY; bagEl.hidden = false;
+  }
+  if (!bagEl.hidden && nowMs > bagUntil) bagEl.hidden = true;
 
   const ti = tierIndex(nw);
   if (ti > S.tier) {
@@ -253,6 +268,19 @@ function sync() {
       btn.querySelector('.cost').textContent = money(cost);
       btn.querySelector('.qty').textContent = '×' + Math.max(n, 1);
     }
+  }
+  const lucky = document.getElementById('luckyBtn');
+  if (lucky) {
+    const left = (S.lastLucky || 0) + LUCKY_CD - Date.now();
+    lucky.disabled = left > 0;
+    lucky.querySelector('.ad-txt').textContent = left > 0 ? `Ready in ${fmtTime(left / 1000)}` : `Get ${money(minutesOfIncome(5, 300))}`;
+  }
+  const banner = document.getElementById('boostBanner');
+  if (banner) {
+    const bb = boosted();
+    banner.classList.toggle('active', bb);
+    banner.querySelector('.ab-title').textContent = bb ? `×2 income active · ${fmtTime((S.boostUntil - Date.now()) / 1000)}` : 'Double your income!';
+    banner.querySelector('.ab-sub').textContent = bb ? `Watch another ad for +${BOOST_MINUTES} min` : `Watch a short ad: ×2 income for ${BOOST_MINUTES} minutes`;
   }
   if (sheetKind === 'gifts') {
     const d = document.getElementById('dailyBtn');
@@ -370,6 +398,11 @@ function bizHTML() {
     </div>` : '';
 
   return `
+    <button class="ad-banner" id="boostBanner" data-act="boost">
+      <span class="ab-icon">🚀</span>
+      <span class="ab-text"><b class="ab-title">Double your income!</b><small class="ab-sub"></small></span>
+      <span class="ad-play big">▶</span>
+    </button>
     <div class="row-head"><h2>Businesses</h2><div class="chips">${modes}</div></div>
     ${rows}
     <h2>Upgrades</h2>
@@ -572,7 +605,7 @@ function goalsHTML() {
       <div class="row-icon">${g.icon}</div>
       <div class="row-info"><div class="row-name">${g.text}</div>
         <div class="row-sub">Reward ${money(goalReward(g))}</div></div>
-      ${state === 'ready' ? `<button class="btn gold" data-act="claim" data-id="${g.id}">Claim</button>`
+      ${state === 'ready' ? `<div class="claim-pair">${adBtn('×2', `data-act="claim2" data-id="${g.id}"`, 'small-ad')}<button class="btn gold" data-act="claim" data-id="${g.id}">Claim</button></div>`
         : state === 'done' ? '<span class="tag">✔</span>' : '<span class="tag">…</span>'}
     </div>`;
   return `<div class="hint">${done.length}/${GOALS.length} done</div>` +
@@ -582,6 +615,8 @@ function goalsHTML() {
 
 function bonusHTML() {
   return `
+  <div class="card lucky-card"><h3>💸 Lucky cash</h3><p class="muted">Watch a short ad and grab free money. Every 4 minutes.</p>
+    ${adBtn('Get cash', 'id="luckyBtn" data-act="lucky"', 'big wide')}</div>
   <div class="card"><h3>Daily gift</h3><p class="muted">Free cash every 24 hours.</p>
     <button class="btn gold wide" id="dailyBtn" data-act="daily">Claim</button></div>
   <div class="card"><h3>Promo code</h3>
@@ -756,6 +791,33 @@ async function onAction(e) {
       drawStage(); return rerender();
     }
     case 'ep': return playEpisode(id);
+    case 'claim2': {
+      const g = GOALS.find((x) => x.id === id);
+      if (S.goals[id] || !g.check(S)) return;
+      if (!(await showRewardedAd())) return;
+      if (S.goals[id]) return;
+      const r = goalReward(g) * 2;
+      S.goals[id] = 1; earn(r); save(); haptic('heavy');
+      coinBurst(t, $('#cashBox'), 14);
+      toast(`${g.text}: +${money(r)}`, 'good');
+      return renderSheet('goals');
+    }
+    case 'lucky': {
+      if (Date.now() < (S.lastLucky || 0) + LUCKY_CD) return;
+      if (!(await showRewardedAd())) return;
+      const r = minutesOfIncome(5, 300);
+      S.lastLucky = Date.now(); earn(r); save(); haptic('heavy');
+      coinBurst(t, $('#cashBox'), 14);
+      return toast(`Lucky cash +${money(r)} 💸`, 'good');
+    }
+    case 'bag': {
+      $('#bag').hidden = true;
+      if (!(await showRewardedAd())) return;
+      const r = minutesOfIncome(3, 200);
+      earn(r); save(); haptic('heavy');
+      coinBurst($('#heroBtn'), $('#cashBox'), 16);
+      return toast(`Money bag +${money(r)} 💰`, 'good');
+    }
     case 'claim': {
       const g = GOALS.find((x) => x.id === id);
       if (S.goals[id] || !g.check(S)) return;
@@ -901,7 +963,7 @@ function showButtons(ep, m) {
         ${prizes.map((p, i) => `<button class="wish w${i}" data-w="${i}" ${revealed.includes(i) ? 'disabled' : ''}>
           ${revealed.includes(i) ? `<span>${p.label}</span>` : ''}</button>`).join('')}
       </div>
-      ${best && !extra ? '<button class="btn" id="again">▶ Press one more (ad)</button>' : ''}
+      ${best && !extra ? adBtn('Press one more', 'id="again"') : ''}
       ${best && extra !== 'pending' ? '<button class="btn gold" id="take">Take it</button>' : ''}
       <button class="x" aria-label="Close">✕</button></div>`;
     m.querySelector('.x').onclick = closeModal;
@@ -936,7 +998,7 @@ function finishEpisode(ep, m, title, sub, first, mult = 1) {
     ${sub ? `<div class="votes">${sub}</div>` : ''}
     <div class="reward">+${money(r)}</div>
     <div class="choices">
-      <button class="btn gold big" id="x2">▶ ×2 reward</button>
+      ${adBtn(`×2 reward · ${money(r * 2)}`, 'id="x2"', 'big')}
       <button class="btn big alt" id="take1">Take ${money(r)}</button>
     </div>
     <div class="muted center">Next episode drops with the next Trinoko short.</div></div>`;
@@ -977,7 +1039,7 @@ function offlineModal(amount, secs) {
   m.innerHTML = `<div class="sheet"><div class="sheet-title">While you were away (${fmtTime(secs)})</div>
     <div class="reward">+${money(amount)}</div>
     <div class="choices">
-      <button class="btn gold big" id="x2">▶ Collect ×2</button>
+      ${adBtn(`Collect ×2 · ${money(amount * 2)}`, 'id="x2"', 'big')}
       <button class="btn big alt" id="take">Collect</button>
     </div></div>`;
   m.querySelector('#take').onclick = (e) => { earn(amount); save(); coinBurst(e.target, $('#cashBox'), 10); closeModal(); };
@@ -985,15 +1047,31 @@ function offlineModal(amount, secs) {
 }
 
 function tierModal(ti) {
-  if (modalKind) { toast(`NEW LEVEL: ${TIERS[ti].name}!`, 'good'); return; }
+  const bonus = tierBonus(ti);
+  if (modalKind) { earn(bonus); toast(`NEW LEVEL: ${TIERS[ti].name}! +${money(bonus)}`, 'good'); return; }
   const m = openModal('tierup');
   confetti();
   m.innerHTML = `<div class="sheet"><div class="burst"></div><div class="sheet-kicker">NEW LEVEL</div>
     <div class="sheet-title big">${TIERS[ti].name.toUpperCase()}</div>
     <div class="tier-hero">${heroHTML(ti, 'smug')}</div>
-    <button class="btn gold big wide" data-act="close">Let's go</button></div>`;
+    <div class="muted">Level bonus</div>
+    <div class="reward">+${money(bonus)}</div>
+    <div class="choices">
+      ${adBtn(`Collect ×2 · ${money(bonus * 2)}`, 'id="tx2"', 'big')}
+      <button class="btn alt big" id="tx1">Collect</button>
+    </div></div>`;
+  m.querySelector('#tx1').onclick = (e) => { earn(bonus); save(); coinBurst(e.target, $('#cashBox'), 10); closeModal(); };
+  m.querySelector('#tx2').onclick = async (e) => {
+    if (await showRewardedAd()) { earn(bonus * 2); save(); coinBurst(e.target, $('#cashBox'), 16); closeModal(); }
+  };
   haptic('heavy');
   if (tab === 'market' || tab === 'story') rerender();
+}
+
+function tabInterstitial() {
+  if (Date.now() - sessionStart < 180000) return;
+  if ((S.tut && S.tut < 9) || modalKind || casino.isBusy()) return;
+  maybeShowInterstitial();
 }
 
 function rebirthModal() {

@@ -16,7 +16,7 @@ export const ADSGRAM_INTERSTITIAL_ID = 'int-53880';
 export const ADSGRAM_TASK_ID = 'task-53881';
 
 // Minimum pause between interstitial ads.
-export const INTERSTITIAL_GAP_MIN = 3;
+export const INTERSTITIAL_GAP_MIN = 4;
 
 // Max time offline income keeps accumulating.
 export const OFFLINE_CAP_HOURS = 2;

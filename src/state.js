@@ -1,6 +1,7 @@
 // The single game state object, shared by every module.
 import { writeSave } from './platform.js';
 import { initMarket } from './market.js';
+import { LUXURY } from './assets.js';
 
 export const DEFAULT = () => ({
   v: 2,
@@ -14,6 +15,8 @@ export const DEFAULT = () => ({
   market: {},
   props: {},
   lux: [],
+  ride: null,
+  casino: { won: 0, lost: 0, best: 0 },
   karma: 0,
   stars: 0,
   lives: 0,
@@ -39,8 +42,11 @@ export function loadInto(raw) {
   try { data = raw ? JSON.parse(raw) : null; } catch (e) { data = null; }
   Object.assign(S, DEFAULT(), data || {});
   S.stats = { ...DEFAULT().stats, ...(S.stats || {}) };
+  S.casino = { ...DEFAULT().casino, ...(S.casino || {}) };
   if (!Array.isArray(S.upg)) S.upg = [];
   if (!Array.isArray(S.lux)) S.lux = [];
+  // v1 → v2 item ids
+  S.lux = [...new Set(S.lux.map((id) => (id === 'supercar' ? 'gold' : id)))].filter((id) => LUXURY.some((l) => l.id === id));
   if (!Array.isArray(S.pending)) S.pending = [];
   S.bestTier = Math.max(S.bestTier || 0, S.tier || 0);
   initMarket(S);
@@ -77,6 +83,7 @@ export function rebirth(stars) {
     taps: S.taps,
     market: S.market,
     lastDaily: S.lastDaily,
+    casino: S.casino,
   };
   Object.assign(S, DEFAULT(), keep);
   S.money = 15 * (1 + S.stars);

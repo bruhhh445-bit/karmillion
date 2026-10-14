@@ -4,7 +4,12 @@ import {
   costOf, bizIncome, nextMilestone, incomeBreakdown, incomePerSec, tapValue, tapUpgradeCost,
   tierIndex, netWorth, stockValue, starsForRebirth, fame, allMult, fmt, fmtTime, money, pct,
 } from './economy.js';
-import { PROPERTIES, LUXURY, PROP_MAX, PROP_SELL, LUX_SELL, propCost, homeOf, carOf } from './assets.js';
+import {
+  PROPERTIES, LUXURY, LUX_KINDS, PROP_MAX, PROP_SELL, LUX_SELL, propCost, propArt, luxArt, homeOf, carOf, boatOf, airOf,
+} from './assets.js';
+import { bizIcon, tabIcon, stockLogo, coin } from './art/icons.js';
+import { sceneSVG } from './art/scene.js';
+import { createCasino } from './casino.js';
 import { STOCKS, TICK_SEC, marketTick, changeOf, buyStock, sellStock, drawChart } from './market.js';
 import { pickEvent, eventAmount, karmaTitle } from './events.js';
 import { GOALS } from './goals.js';
@@ -27,8 +32,8 @@ const minutesOfIncome = (m, min) => Math.max(min, incomePerSec(S) * m * 60);
 const goalReward = (g) => Math.min(minutesOfIncome(g.mins, g.min), g.min * 25);
 
 let tab = 'biz';
-let assetsSub = 'props';
-let moreSub = 'goals';
+let assetsSub = 'homes';
+let moreSub = 'story';
 let bizMode = 1;           // 1 | 10 | 'max'
 let stockBuyMode = 1;      // 1 | 10 | 100 | 'max'
 let modalKind = '';        // e.g. 'stock:BYTE', 'episode', 'event'
@@ -71,7 +76,7 @@ async function boot() {
 function renderShell() {
   $('#app').innerHTML = `
   <header class="hud">
-    <div class="money" id="money">$0</div>
+    <div class="money"><span class="hud-coin">${coin()}</span><span id="money">$0</span></div>
     <div class="hud-row">
       <span><b id="ips">$0</b>/sec</span>
       <span class="boost-badge" id="boostBadge" hidden>×2 <b id="boostLeft"></b></span>
@@ -79,7 +84,9 @@ function renderShell() {
     </div>
   </header>
   <section class="stage" id="stage">
-    <div class="rays"></div>
+    <div class="scene" id="sceneBg"></div>
+    <div class="stage-plane" id="plane"></div>
+    <div class="stage-boat" id="boat"></div>
     <div class="stage-home" id="home"></div>
     <div class="stage-car" id="car"></div>
     <div class="chips-top">
@@ -98,11 +105,11 @@ function renderShell() {
   <div class="ticker" id="ticker">📰 Welcome to Karmillion. Every choice has karma.</div>
   <main class="panel" id="panel"></main>
   <nav class="tabs" id="tabs">
-    <button data-tab="biz">💼<span>Business</span></button>
-    <button data-tab="market">📈<span>Market</span></button>
-    <button data-tab="assets">🏠<span>Assets</span></button>
-    <button data-tab="story">🎬<span>Story</span></button>
-    <button data-tab="more">⭐<span>More</span><i class="dot" id="moreDot" hidden></i></button>
+    <button data-tab="biz">${tabIcon('biz')}<span>Business</span></button>
+    <button data-tab="market">${tabIcon('market')}<span>Market</span></button>
+    <button data-tab="assets">${tabIcon('assets')}<span>Assets</span></button>
+    <button data-tab="casino">${tabIcon('casino')}<span>Casino</span></button>
+    <button data-tab="more">${tabIcon('more')}<span>More</span><i class="dot" id="moreDot" hidden></i></button>
   </nav>
   <div id="modal" class="modal"></div>
   <div id="toasts"></div>`;
@@ -116,13 +123,16 @@ function renderShell() {
   $('#app').addEventListener('click', onAction);
 }
 
+let sceneKey = '';
 function drawStage(mood = 'happy') {
   $('#heroBtn').innerHTML = heroHTML(S.tier, mood);
-  const home = homeOf(S), car = carOf(S);
-  $('#home').textContent = home ? home.icon : '📦';
-  $('#home').title = home ? home.name : 'Cardboard box';
-  $('#car').textContent = car ? car.icon : '';
-  $('#car').classList.toggle('gold', !!car?.gold);
+  const home = homeOf(S), car = carOf(S), boat = boatOf(S), air = airOf(S);
+  const key = `${S.tier}|${!!boat}`;
+  if (key !== sceneKey) { sceneKey = key; $('#sceneBg').innerHTML = sceneSVG({ tier: S.tier, sea: !!boat }); }
+  $('#home').innerHTML = propArt(home ? home.id : 'box');
+  $('#car').innerHTML = car ? luxArt(car) : '';
+  $('#boat').innerHTML = boat ? luxArt(boat, true) : '';
+  $('#plane').innerHTML = air ? luxArt(air) : '';
 }
 
 function onTap(e) {
@@ -223,6 +233,7 @@ function sync() {
     }
   }
   $('#moreDot').hidden = !GOALS.some((g) => !S.goals[g.id] && g.check(S));
+  if (tab === 'casino' && !casino.isBusy()) { const r = $('#casinoRoot'); if (r) casino.refreshBet(r); }
 }
 
 // ---------------------------------------------------------------- market tick
@@ -248,7 +259,7 @@ function showTab(name) {
   if (name === 'biz') p.innerHTML = bizHTML();
   if (name === 'market') renderMarket();
   if (name === 'assets') p.innerHTML = assetsHTML();
-  if (name === 'story') p.innerHTML = storyHTML();
+  if (name === 'casino') p.innerHTML = `<div id="casinoRoot">${casino.html()}</div>`;
   if (name === 'more') renderMore();
   sync();
 }
@@ -291,7 +302,7 @@ function bizHTML() {
     const inc = bizIncome(S, b) * br.mult;
     return `
     <div class="row">
-      <div class="row-icon">${b.icon}</div>
+      <div class="row-icon">${bizIcon(b.id)}</div>
       <div class="row-info">
         <div class="row-name">${b.name} <span class="lvl">Lv ${lvl}</span></div>
         <div class="row-sub">${lvl ? money(inc) + '/s' : money(b.income * br.mult) + '/s per level'}</div>
@@ -306,7 +317,7 @@ function bizHTML() {
     .sort((a, b) => a.cost - b.cost)[0];
   const upgRows = avail.slice(0, 6).map((u) => `
     <div class="row small">
-      <div class="row-icon">${u.icon}</div>
+      <div class="row-icon">${bizIcon(u.biz)}</div>
       <div class="row-info"><div class="row-name">${u.name}</div>
         <div class="row-sub">${BUSINESSES.find((b) => b.id === u.biz).name} income ×${UPG_MULT}</div></div>
       <button class="buy" data-act="buyUpg" data-id="${u.id}" data-cost="${u.cost}"><span class="cost">${money(u.cost)}</span></button>
@@ -315,7 +326,7 @@ function bizHTML() {
   const tl = S.tapLvl || 0;
   const tapRow = tl < TAP_MAX ? `
     <div class="row small">
-      <div class="row-icon">👆</div>
+      <div class="row-icon tap-ico">👆</div>
       <div class="row-info"><div class="row-name">Hustle Power <span class="lvl">Lv ${tl}</span></div>
         <div class="row-sub">Tap = ${money(tapValue(S))} → ×2</div></div>
       <button class="buy" data-act="tapUp" data-cost="${tapUpgradeCost(tl)}"><span class="cost">${money(tapUpgradeCost(tl))}</span></button>
@@ -363,7 +374,7 @@ function renderMarket(live = false) {
       const lock = stockLocked(st);
       return `
       <button class="row stock ${lock ? 'locked' : ''}" data-act="stock" data-id="${st.id}" ${lock ? 'disabled' : ''}>
-        <div class="row-icon">${st.icon}</div>
+        <div class="row-icon logo">${stockLogo(st.id)}</div>
         <div class="row-info">
           <div class="row-name">${st.id} <span class="muted">${st.name}</span></div>
           <div class="row-sub">${lock ? `🔒 ${TIERS[st.tier].name}` : pos?.sh ? `You own ${fmt(pos.sh)} · ${money(pos.sh * m.p)}` : st.crypto ? 'Crypto · wild swings' : st.div ? 'Pays dividends' : 'Growth stock'}</div>
@@ -398,7 +409,7 @@ function stockSheet(id, live = false) {
   const box = live ? $('#modal .sheet') : openModal('stock:' + id);
   const html = `
     <button class="x" data-act="close" aria-label="Close">✕</button>
-    <div class="stock-head"><span class="row-icon">${st.icon}</span>
+    <div class="stock-head"><span class="row-icon logo">${stockLogo(st.id)}</span>
       <div><div class="sheet-title">${st.name}</div><div class="muted">${st.id}${st.crypto ? ' · crypto' : ''}${st.div ? ` · dividend ${(st.div * 3600 * 100).toFixed(0)}%/h` : ''}</div></div></div>
     <div class="stock-price"><b>${money(m.p)}</b> <span class="${ch >= 0 ? 'up' : 'down'}">${pct(ch)}</span></div>
     <canvas class="chart" id="bigChart"></canvas>
@@ -421,47 +432,57 @@ function stockSheet(id, live = false) {
 
 // ---------------------------------------------------------------- ASSETS tab
 function assetsHTML() {
-  const sub = `<div class="seg">
-    <button class="${assetsSub === 'props' ? 'on' : ''}" data-act="assetsSub" data-id="props">🏠 Real estate</button>
-    <button class="${assetsSub === 'lux' ? 'on' : ''}" data-act="assetsSub" data-id="lux">💎 Luxury</button></div>`;
+  const subs = [['homes', 'Homes'], ...LUX_KINDS];
+  const seg = '<div class="seg five">' + subs.map(([id, l]) =>
+    `<button class="${assetsSub === id ? 'on' : ''}" data-act="assetsSub" data-id="${id}">${l}</button>`).join('') + '</div>';
   const mult = allMult(S);
-  if (assetsSub === 'props') {
-    return sub + '<div class="hint">Properties pay rent forever. Your best one becomes your home.</div>' + PROPERTIES.map((p, i) => {
+  if (assetsSub === 'homes') {
+    return seg + '<div class="hint">Homes pay rent forever. Your best one is where you live.</div>' + PROPERTIES.map((p, i) => {
       const n = S.props[p.id] || 0;
-      const prevOwned = i === 0 || (S.props[PROPERTIES[i - 1].id] || 0) > 0;
+      const open = i === 0 || (S.props[PROPERTIES[i - 1].id] || 0) > 0;
       const cost = propCost(p, n);
       const sellFor = n ? propCost(p, n - 1) * PROP_SELL : 0;
       return `
-      <div class="row ${prevOwned ? '' : 'locked'}">
-        <div class="row-icon">${p.icon}</div>
+      <div class="prop ${open ? '' : 'locked'}">
+        <div class="prop-art">${propArt(p.id)}</div>
         <div class="row-info">
           <div class="row-name">${p.name} <span class="lvl">${n}/${PROP_MAX}</span></div>
           <div class="row-sub">Rent ${money(p.rent * mult)}/s each</div>
-          ${n ? `<button class="link" data-act="propSell" data-id="${p.id}">Sell one for ${money(sellFor)}</button>` : ''}
+          ${n ? `<button class="link" data-act="propSell" data-id="${p.id}">Sell one · ${money(sellFor)}</button>` : ''}
         </div>
-        ${n >= PROP_MAX ? '<span class="tag">MAX</span>' : prevOwned
+        ${n >= PROP_MAX ? '<span class="tag">MAX</span>' : open
           ? `<button class="buy" data-act="propBuy" data-id="${p.id}" data-cost="${cost}"><span class="cost">${money(cost)}</span></button>`
           : '<span class="tag">🔒</span>'}
       </div>`;
     }).join('');
   }
-  return sub + `<div class="hint">Every fame point = +1% income. Fame now: <b>${fame(S)}</b></div><div class="lux-grid">` + LUXURY.map((l) => {
-    const own = S.lux.includes(l.id);
-    return `
-      <div class="lux ${own ? 'own' : ''}">
-        <div class="lux-icon ${l.gold ? 'gold' : ''}">${l.icon}</div>
-        <div class="lux-name">${l.name}</div>
-        <div class="lux-fame">+${l.fame} fame</div>
-        ${own
-          ? `<button class="btn small" data-act="luxSell" data-id="${l.id}">Sell ${money(l.cost * LUX_SELL)}</button>`
-          : `<button class="btn small gold" data-act="luxBuy" data-id="${l.id}" data-cost="${l.cost}">${money(l.cost)}</button>`}
+  const items = LUXURY.filter((l) => l.kind === assetsSub);
+  const ride = carOf(S);
+  const owned = items.filter((l) => S.lux.includes(l.id)).length;
+  return seg + `<div class="hint">Every fame point = +1% income. Fame: <b>${fame(S)}</b> · owned ${owned}/${items.length}</div>` +
+    '<div class="showroom">' + items.map((l) => {
+      const own = S.lux.includes(l.id);
+      const driving = l.kind === 'car' && ride?.id === l.id;
+      return `
+      <div class="show ${own ? 'own' : ''} ${l.kind}">
+        <div class="show-art">${luxArt(l)}</div>
+        <div class="show-info">
+          <div class="show-name">${l.name}</div>
+          <div class="show-fame">+${l.fame} fame</div>
+        </div>
+        <div class="show-act">
+          ${own
+            ? `${l.kind === 'car' ? `<button class="btn small ${driving ? 'gold' : ''}" data-act="ride" data-id="${l.id}" ${driving ? 'disabled' : ''}>${driving ? 'Driving' : 'Drive'}</button>` : '<span class="tag">Owned</span>'}
+               <button class="link" data-act="luxSell" data-id="${l.id}">Sell ${money(l.cost * LUX_SELL)}</button>`
+            : `<button class="buy" data-act="luxBuy" data-id="${l.id}" data-cost="${l.cost}"><span class="cost">${money(l.cost)}</span></button>`}
+        </div>
       </div>`;
-  }).join('') + '</div>';
+    }).join('') + '</div>';
 }
 
 // ---------------------------------------------------------------- STORY tab
 function storyHTML() {
-  return '<h2>Episodes</h2><div class="hint">Every new Trinoko short = a new episode. You decide how it ends.</div>' +
+  return '<div class="hint">Every new Trinoko short = a new episode. You decide how it ends.</div>' +
     EPISODES.map((ep) => {
       const locked = (S.bestTier || 0) < ep.unlockTier;
       const done = S.episodes[ep.id]?.done;
@@ -483,10 +504,11 @@ function storyHTML() {
 
 // ---------------------------------------------------------------- MORE tab
 function renderMore() {
-  const subs = [['goals', '🎯 Goals'], ['bonus', '🎁 Bonus'], ['top', '🏆 Top'], ['life', '🔄 New Life']];
-  const seg = '<div class="seg four">' + subs.map(([id, l]) =>
+  const subs = [['story', '🎬 Story'], ['goals', '🎯 Goals'], ['bonus', '🎁 Bonus'], ['top', '🏆 Top'], ['life', '🔄 Life']];
+  const seg = '<div class="seg five">' + subs.map(([id, l]) =>
     `<button class="${moreSub === id ? 'on' : ''}" data-act="moreSub" data-id="${id}">${l}</button>`).join('') + '</div>';
   const p = $('#panel');
+  if (moreSub === 'story') p.innerHTML = seg + storyHTML();
   if (moreSub === 'goals') p.innerHTML = seg + goalsHTML();
   if (moreSub === 'bonus') { p.innerHTML = seg + bonusHTML(); mountTask(); }
   if (moreSub === 'top') { p.innerHTML = seg + '<div class="muted center">Loading…</div>'; loadTop(seg); }
@@ -588,7 +610,12 @@ function mountTask() {
 }
 
 // ---------------------------------------------------------------- actions
+const casino = createCasino({ S, money, toast: (...a) => toast(...a), haptic: (k) => haptic(k), save: () => save() });
+
 async function onAction(e) {
+  if (tab === 'casino' && e.target.closest('#casinoRoot')) {
+    if (casino.onClick(e, $('#casinoRoot'))) return;
+  }
   const t = e.target.closest('[data-act]');
   if (!t || t.disabled) return;
   const id = t.dataset.id;
@@ -665,10 +692,16 @@ async function onAction(e) {
       haptic('heavy'); drawStage(); toast(`${l.icon} ${l.name}! +${l.fame} fame`, 'good');
       return rerender();
     }
+    case 'ride': {
+      if (!S.lux.includes(id)) return;
+      S.ride = id; haptic('medium'); drawStage();
+      return rerender();
+    }
     case 'luxSell': {
       const l = LUXURY.find((x) => x.id === id);
       if (!S.lux.includes(id)) return;
       S.money += l.cost * LUX_SELL; S.lux = S.lux.filter((x) => x !== id);
+      if (S.ride === id) S.ride = null;
       drawStage(); return rerender();
     }
     case 'ep': return playEpisode(id);
@@ -858,7 +891,7 @@ function finishEpisode(ep, m, title, sub, first, mult = 1) {
     <div class="muted center">Next episode drops with the next Trinoko short.</div></div>`;
   const done = (k) => {
     earn(r * k); haptic('heavy'); save(); closeModal();
-    if (tab === 'story') rerender();
+    if (tab === 'more') rerender();
     maybeShowInterstitial();
   };
   m.querySelector('#take1').onclick = () => done(1);
@@ -906,7 +939,7 @@ function tierModal(ti) {
     <div class="tier-hero">${heroHTML(ti, 'smug')}</div>
     <button class="btn gold big wide" data-act="close">Let's go</button></div>`;
   haptic('heavy');
-  if (tab === 'market' || tab === 'story') rerender();
+  if (tab === 'market' || tab === 'more') rerender();
 }
 
 function rebirthModal() {

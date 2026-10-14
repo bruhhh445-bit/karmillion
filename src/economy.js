@@ -3,22 +3,16 @@ import { PROPERTIES, LUXURY } from './assets.js';
 import { STOCKS } from './market.js';
 
 export const BUSINESSES = [
-  { id: 'flowers',  name: 'Flower Stand',   icon: '🌹', cost: 15,     income: 0.5,
-    upg: ['Fresh Roses', 'Bouquet Delivery', 'Flower Empire'] },
-  { id: 'lemonade', name: 'Lemonade Cart',  icon: '🍋', cost: 120,    income: 3,
-    upg: ['Ice Cubes', 'Secret Recipe', 'Lemonade Franchise'] },
-  { id: 'carwash',  name: 'Car Wash',       icon: '🚿', cost: 1100,   income: 20,
-    upg: ['Foam Cannon', 'VIP Wax', 'Robot Washers'] },
-  { id: 'burger',   name: 'Burger Shop',    icon: '🍔', cost: 12000,  income: 150,
-    upg: ['Double Patty', 'Drive-Thru', 'Burger Chain'] },
-  { id: 'startup',  name: 'Tech Startup',   icon: '💻', cost: 130000, income: 1200,
-    upg: ['Free Pizza Fridays', 'AI Assistant', 'Unicorn Status'] },
-  { id: 'rocket',   name: 'Rocket Co.',     icon: '🚀', cost: 1.5e6,  income: 10000,
-    upg: ['Reusable Boosters', 'Moon Tourism', 'Mars Colony'] },
-  { id: 'yacht',    name: 'Yacht Club',     icon: '🛥️', cost: 2e7,    income: 90000,
-    upg: ['Champagne Bar', 'Celebrity Members', 'Floating City'] },
-  { id: 'island',   name: 'Island Resort',  icon: '🏝️', cost: 3e8,    income: 800000,
-    upg: ['Infinity Pool', 'Private Airport', 'Island Nation'] },
+  { id: 'flowers',  name: 'Flower Stand',   cost: 15,     income: 0.5,    upg: ['Fresh Roses', 'Bouquet Delivery', 'Flower Empire'] },
+  { id: 'lemonade', name: 'Lemonade Cart',  cost: 120,    income: 3,      upg: ['Ice Cubes', 'Secret Recipe', 'Lemonade Franchise'] },
+  { id: 'carwash',  name: 'Car Wash',       cost: 1100,   income: 20,     upg: ['Foam Cannon', 'VIP Wax', 'Robot Washers'] },
+  { id: 'burger',   name: 'Burger Shop',    cost: 12000,  income: 150,    upg: ['Double Patty', 'Drive-Thru', 'Burger Chain'] },
+  { id: 'startup',  name: 'Tech Startup',   cost: 130000, income: 1200,   upg: ['Free Pizza Fridays', 'AI Assistant', 'Unicorn Status'] },
+  { id: 'club',     name: 'Night Club',     cost: 5e5,    income: 3800,   upg: ['Laser Show', 'Celebrity DJ', 'Club Chain'] },
+  { id: 'rocket',   name: 'Rocket Co.',     cost: 1.5e6,  income: 10000,  upg: ['Reusable Boosters', 'Moon Tourism', 'Mars Colony'] },
+  { id: 'yacht',    name: 'Yacht Club',     cost: 2e7,    income: 90000,  upg: ['Champagne Bar', 'Celebrity Members', 'Floating City'] },
+  { id: 'casino',   name: 'Casino Royale',  cost: 8e7,    income: 3e5,    upg: ['High Roller Room', 'Golden Slots', 'Casino Strip'] },
+  { id: 'island',   name: 'Island Resort',  cost: 3e8,    income: 8e5,    upg: ['Infinity Pool', 'Private Airport', 'Island Nation'] },
 ];
 
 export const COST_GROWTH = 1.15;
@@ -29,7 +23,7 @@ export const UPG_MULT = 3;
 
 // Flat list of one-time upgrades, generated from the businesses above.
 export const UPGRADES = BUSINESSES.flatMap((b) => b.upg.map((name, i) => ({
-  id: `${b.id}_${i}`, biz: b.id, name, at: UPG_AT[i], cost: b.cost * UPG_PRICE[i], icon: b.icon,
+  id: `${b.id}_${i}`, biz: b.id, name, at: UPG_AT[i], cost: b.cost * UPG_PRICE[i],
 })));
 
 // Wealth tiers by net worth. The hero's look changes with each tier.

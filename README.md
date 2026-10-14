@@ -9,10 +9,10 @@ Telegram Mini App game for the Trinoko channel: from broke to billionaire, every
 
 - **Business** – 8 businesses, milestones (×2), 24 one-time upgrades (×3), Hustle Power for taps
 - **Market** – 6 fictional stocks + 2 cryptos, live charts, news shocks, dividends, P/L
-- **Assets** – real estate (rent, becomes your home on screen) and luxury (fame = +1% income each, best car next to the hero)
+- **Assets** – 7 homes (rent, your best one stands on screen), 12 cars, 6 boats, 4 aircraft and bling (fame = +1% income each; your car, yacht and plane appear in the scene)
+- **Casino** – Slots, European roulette and Crash, play money only, max bet 25% of cash
 - **Karma events** – random life choices every few minutes (wallet, beggar, loans, street race…), karma titles from Villain to Saint
-- **Story** – one episode per Trinoko short, players vote on the ending
-- **More** – goals with rewards, daily gift, promo codes, Adsgram tasks, leaderboard by net worth, New Life (rebirth for ⭐ stars, +25% income each)
+- **More** – story episodes (one per Trinoko short, players vote on the ending), goals with rewards, daily gift, promo codes, Adsgram tasks, leaderboard by net worth, New Life (rebirth for ⭐ stars, +25% income each)
 
 ## How it works (all free)
 
@@ -36,6 +36,8 @@ Nothing in this repo is secret. **Never commit the bot token or Google service-a
 - `src/state.js` – save format, New Life
 - `src/episodes.js` – story episodes (add one per new short)
 - `src/main.js` – game UI and logic
+- `src/casino.js` – casino games
+- `src/art/` – all vector art: cars, boats & aircraft, homes, icons, the background scene
 - `src/hero.js`, `src/style.css` – the blocky hero and the look
 - `firestore.rules` – paste into Firebase Console → Firestore → Rules
 

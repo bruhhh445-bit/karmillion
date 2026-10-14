@@ -31,7 +31,9 @@ function skyline(y, color, seed, count, minH, maxH, lit, maxX = 420) {
   return out;
 }
 
+let sceneUid = 0;
 export function sceneSVG({ tier = 0, sea = false } = {}) {
+  const gid = 'sky' + (++sceneUid);
   const [top, bottom] = SKIES[Math.min(tier, SKIES.length - 1)];
   const night = tier <= 1;
   const day = tier >= 4 && tier <= 5;
@@ -48,8 +50,8 @@ export function sceneSVG({ tier = 0, sea = false } = {}) {
     <path d="M230 168 H430" stroke="${INK}" stroke-width="3"/>
     <path d="M250 182 q8 -4 16 0 M300 190 q8 -4 16 0 M350 180 q8 -4 16 0" stroke="#bfe6ff" stroke-width="3" fill="none" stroke-linecap="round"/>` : '';
   return `<svg viewBox="0 0 400 260" preserveAspectRatio="xMidYMax slice" class="scene-bg" aria-hidden="true">
-    <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${top}"/><stop offset="1" stop-color="${bottom}"/></linearGradient></defs>
-    <rect width="400" height="260" fill="url(#sky)"/>
+    <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${top}"/><stop offset="1" stop-color="${bottom}"/></linearGradient></defs>
+    <rect width="400" height="260" fill="url(#${gid})"/>
     ${stars}${sun}
     ${cloud(20, 30, 0.8)}${cloud(180, 14, 0.6)}${cloud(300, 80, 0.7)}
     ${far}${near}

@@ -51,6 +51,9 @@ const TABS = {
   market: `<rect x="6" y="8" width="52" height="48" rx="8" fill="#2c3550" ${s()}/><path d="M14 44 L26 32 L34 38 L50 18" stroke="#36c25a" stroke-width="5" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M42 18 H50 V26" stroke="#36c25a" stroke-width="5" fill="none" stroke-linecap="round"/>`,
   assets: `<path d="M8 30 L32 10 L56 30 V56 H8 Z" fill="#e8345a" ${s()}/><rect x="26" y="36" width="12" height="20" fill="#ffc928" ${s(3)}/>`,
   casino: `<rect x="10" y="10" width="44" height="44" rx="9" fill="#fff" ${s()}/>${[[22, 22], [42, 22], [32, 32], [22, 42], [42, 42]].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="4" fill="#e8345a"/>`).join('')}`,
+  story: `<rect x="6" y="22" width="52" height="34" rx="6" fill="#ff4f7b" ${s()}/>
+    <path d="M6 14 L54 6 L56 16 L8 24 Z" fill="#fff" ${s()}/><path d="M18 12 L24 20 M32 10 L38 18 M44 8 L50 16" ${s(3)}/>
+    <path d="M26 31 L40 39 L26 47 Z" fill="#fff" ${s(3)}/>`,
   more: `<path d="M32 6 L39 24 L58 24 L43 36 L49 56 L32 44 L15 56 L21 36 L6 24 L25 24 Z" fill="#ffc928" ${s()}/>`,
 };
 export const tabIcon = (id) => svg(TABS[id]);

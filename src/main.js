@@ -21,6 +21,8 @@ import { initCloud, submitScore, topPlayers, redeemCode, castVote, getVotes } fr
 import { OFFLINE_CAP_HOURS, BOOST_MINUTES, ADSGRAM_TASK_ID, YOUTUBE_URL } from './config.js';
 import { EPISODES } from './episodes.js';
 import { heroHTML, girlHTML, richGuyHTML } from './hero.js';
+import { initFx, coinBurst, confetti, smoothCounter, pop } from './fx.js';
+import { playIntro } from './intro.js';
 
 // ---------------------------------------------------------------- helpers
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -33,19 +35,26 @@ const goalReward = (g) => Math.min(minutesOfIncome(g.mins, g.min), g.min * 25);
 
 let tab = 'biz';
 let assetsSub = 'homes';
-let moreSub = 'story';
+let sheetKind = '';        // 'goals' | 'gifts' | 'top' | 'life' | 'stock:ID'
 let bizMode = 1;           // 1 | 10 | 'max'
 let stockBuyMode = 1;      // 1 | 10 | 100 | 'max'
 let modalKind = '';        // e.g. 'stock:BYTE', 'episode', 'event'
 let lastNews = '';
+const TABS = ['biz', 'market', 'assets', 'casino', 'story'];
+const cashText = smoothCounter((v) => money(v));
+const worthText = smoothCounter((v) => money(v));
 
 // ---------------------------------------------------------------- boot
 async function boot() {
   initTelegram();
   loadInto(await loadSave());
+  if (S.introDone === undefined) S.introDone = S.lifetimeEarned > 0 || Object.keys(S.biz).length > 0;
   renderShell();
   showTab('biz');
   initCloud();
+  if (!S.introDone) {
+    playIntro($('#intro'), () => { S.introDone = true; S.tut = 1; save(); coach(); });
+  } else if (S.tut && S.tut < 9) coach();
 
   const away = Math.min((Date.now() - (S.lastSeen || Date.now())) / 1000, OFFLINE_CAP_HOURS * 3600);
   if (away > 60) {
@@ -75,50 +84,71 @@ async function boot() {
 // ---------------------------------------------------------------- shell
 function renderShell() {
   $('#app').innerHTML = `
-  <header class="hud">
-    <div class="money"><span class="hud-coin">${coin()}</span><span id="money">$0</span></div>
-    <div class="hud-row">
-      <span><b id="ips">$0</b>/sec</span>
-      <span class="boost-badge" id="boostBadge" hidden>×2 <b id="boostLeft"></b></span>
-      <span>Net worth <b id="nw">$0</b></span>
-    </div>
-  </header>
   <section class="stage" id="stage">
     <div class="scene" id="sceneBg"></div>
     <div class="stage-plane" id="plane"></div>
     <div class="stage-boat" id="boat"></div>
     <div class="stage-home" id="home"></div>
     <div class="stage-car" id="car"></div>
-    <div class="chips-top">
-      <span class="pill" id="karmaPill"></span>
-      <span class="pill gold" id="starPill" hidden></span>
+    <div class="stage-shade"></div>
+
+    <header class="hud">
+      <div class="hud-top">
+        <button class="lvl-chip" data-act="openSheet" data-id="life" aria-label="Your level">
+          <span class="lvl-ring" id="lvlRing"><b id="lvlNum">1</b></span>
+          <span class="lvl-text"><b id="tierName">Broke</b><small id="tierNext"></small></span>
+        </button>
+        <span class="karma-chip" id="karmaPill"></span>
+      </div>
+      <div class="cash" id="cashBox">
+        <span class="cash-coin">${coin()}</span><span class="cash-num" id="money">$0</span>
+      </div>
+      <div class="cash-sub">
+        <span class="ips-pill"><b id="ips">$0</b>/sec</span>
+        <span class="boost-badge" id="boostBadge" hidden>×2 <b id="boostLeft"></b></span>
+        <span class="nw-pill">Net worth <b id="nw">$0</b></span>
+      </div>
+    </header>
+
+    <div class="quick">
+      <button class="q-btn" data-act="openSheet" data-id="goals" aria-label="Goals"><span>🎯</span><i class="dot" id="goalDot" hidden></i></button>
+      <button class="q-btn" data-act="openSheet" data-id="gifts" aria-label="Gifts"><span>🎁</span><i class="dot" id="giftDot" hidden></i></button>
+      <button class="q-btn" data-act="openSheet" data-id="top" aria-label="Leaderboard"><span>🏆</span></button>
+      <button class="q-btn" data-act="openSheet" data-id="life" aria-label="New Life"><span>⭐</span><i class="dot" id="lifeDot" hidden></i></button>
     </div>
-    <div class="tier">
-      <div class="tier-name" id="tierName"></div>
-      <div class="tier-bar"><i id="tierFill"></i></div>
-      <div class="tier-next" id="tierNext"></div>
-    </div>
+
     <button class="hero-btn" id="heroBtn" aria-label="Tap to earn money"></button>
     <div id="floaters"></div>
-    <button class="btn boost" data-act="boost">▶ ×2 income · ${BOOST_MINUTES} min</button>
+    <button class="boost" data-act="boost"><span class="boost-ico">▶</span><span><b>×2 income</b><small>${BOOST_MINUTES} min</small></span></button>
   </section>
-  <div class="ticker" id="ticker">📰 Welcome to Karmillion. Every choice has karma.</div>
-  <main class="panel" id="panel"></main>
-  <nav class="tabs" id="tabs">
+
+  <div class="sheet-wrap">
+    <div class="ticker"><div class="ticker-in" id="ticker">📰 Welcome to Karmillion. Every choice has karma.</div></div>
+    <main class="panel" id="panel"></main>
+  </div>
+
+  <nav class="tabbar" id="tabs">
+    <i class="tab-ind" id="tabInd"></i>
     <button data-tab="biz">${tabIcon('biz')}<span>Business</span></button>
     <button data-tab="market">${tabIcon('market')}<span>Market</span></button>
     <button data-tab="assets">${tabIcon('assets')}<span>Assets</span></button>
     <button data-tab="casino">${tabIcon('casino')}<span>Casino</span></button>
-    <button data-tab="more">${tabIcon('more')}<span>More</span><i class="dot" id="moreDot" hidden></i></button>
+    <button data-tab="story">${tabIcon('story')}<span>Story</span><i class="dot" id="storyDot" hidden></i></button>
   </nav>
-  <div id="modal" class="modal"></div>
-  <div id="toasts"></div>`;
 
+  <div id="bsheet" class="bsheet"><div class="bs-back" data-act="closeSheet"></div><div class="bs-card" id="bsCard"></div></div>
+  <div id="modal" class="modal"></div>
+  <div id="coach" class="coach"></div>
+  <div id="toasts"></div>
+  <div id="fx" class="fx"></div>
+  <div id="intro" class="intro"></div>`;
+
+  initFx($('#fx'));
   drawStage();
   $('#heroBtn').addEventListener('pointerdown', onTap);
   $('#tabs').addEventListener('click', (e) => {
     const b = e.target.closest('button[data-tab]');
-    if (b) { haptic('light'); showTab(b.dataset.tab); }
+    if (b && b.dataset.tab !== tab) { haptic('light'); showTab(b.dataset.tab, true); }
   });
   $('#app').addEventListener('click', onAction);
 }
@@ -130,7 +160,11 @@ function drawStage(mood = 'happy') {
   const key = `${S.tier}|${!!boat}`;
   if (key !== sceneKey) { sceneKey = key; $('#sceneBg').innerHTML = sceneSVG({ tier: S.tier, sea: !!boat }); }
   $('#home').innerHTML = propArt(home ? home.id : 'box');
-  $('#car').innerHTML = car ? luxArt(car) : '';
+  if (($('#car').dataset.id || '') !== (car?.id || '')) {
+    $('#car').dataset.id = car?.id || '';
+    $('#car').innerHTML = car ? luxArt(car) : '';
+    const c = $('#car'); c.classList.remove('drive-in'); void c.offsetWidth; if (car) c.classList.add('drive-in');
+  }
   $('#boat').innerHTML = boat ? luxArt(boat, true) : '';
   $('#plane').innerHTML = air ? luxArt(air) : '';
 }
@@ -150,6 +184,7 @@ function onTap(e) {
   setTimeout(() => f.remove(), 900);
   const h = $('#heroBtn .hero');
   h?.classList.remove('bump'); void h?.offsetWidth; h?.classList.add('bump');
+  if (S.tut === 1 && S.taps >= 5) { S.tut = 2; coach(); }
 }
 
 function toast(text, kind = '') {
@@ -164,10 +199,10 @@ function toast(text, kind = '') {
 // ---------------------------------------------------------------- frame (10 fps)
 let lastSync = 0;
 function frame() {
-  $('#money').textContent = money(S.money);
+  $('#money').textContent = cashText(S.money);
   $('#ips').textContent = money(ips());
   const nw = netWorth(S);
-  $('#nw').textContent = money(nw);
+  $('#nw').textContent = worthText(nw);
   const b = boosted();
   $('#boostBadge').hidden = !b;
   if (b) $('#boostLeft').textContent = fmtTime((S.boostUntil - Date.now()) / 1000);
@@ -182,16 +217,11 @@ function frame() {
   }
   const cur = TIERS[S.tier], nxt = TIERS[S.tier + 1];
   $('#tierName').textContent = cur.name;
-  if (nxt) {
-    $('#tierFill').style.width = Math.max(0, Math.min(100, ((nw - cur.at) / (nxt.at - cur.at)) * 100)) + '%';
-    $('#tierNext').textContent = `Next: ${nxt.name} at ${money(nxt.at)} net worth`;
-  } else {
-    $('#tierFill').style.width = '100%';
-    $('#tierNext').textContent = 'Billionaire! Start a New Life in ⭐ More for stars';
-  }
-  $('#karmaPill').textContent = `${karmaTitle(S.karma)} ${S.karma > 0 ? '+' : ''}${Math.round(S.karma)}`;
-  $('#starPill').hidden = !S.stars;
-  $('#starPill').textContent = `⭐ ${S.stars}`;
+  $('#lvlNum').textContent = S.tier + 1;
+  const prog = nxt ? Math.max(0, Math.min(1, (nw - cur.at) / (nxt.at - cur.at))) : 1;
+  $('#lvlRing').style.setProperty('--p', (prog * 100).toFixed(1));
+  $('#tierNext').textContent = nxt ? `${Math.floor(prog * 100)}% to ${nxt.name}` : 'Start a New Life ⭐';
+  $('#karmaPill').textContent = `${karmaTitle(S.karma)} ${S.karma > 0 ? '+' : ''}${Math.round(S.karma)}${S.stars ? ` · ⭐${S.stars}` : ''}`;
 
   // friends paying back, etc.
   if (S.pending.length) {
@@ -203,8 +233,8 @@ function frame() {
   const now = performance.now();
   if (now - lastSync > 250) { lastSync = now; sync(); }
 
-  // random life event
-  if (!modalKind && Date.now() - S.lastEvent > 180000) openEvent();
+  // random life event (not during the tutorial or while a panel is open)
+  if (!modalKind && !sheetKind && S.introDone && !(S.tut && S.tut < 9) && Date.now() - S.lastEvent > 180000) openEvent();
 }
 
 // enable/disable every price button by data-cost, refresh live labels
@@ -224,7 +254,7 @@ function sync() {
       btn.querySelector('.qty').textContent = '×' + Math.max(n, 1);
     }
   }
-  if (tab === 'more' && moreSub === 'bonus') {
+  if (sheetKind === 'gifts') {
     const d = document.getElementById('dailyBtn');
     if (d) {
       const left = S.lastDaily + 86400000 - Date.now();
@@ -232,7 +262,10 @@ function sync() {
       d.textContent = left > 0 ? `Come back in ${fmtTime(left / 1000)}` : `Claim ${money(minutesOfIncome(20, 200))}`;
     }
   }
-  $('#moreDot').hidden = !GOALS.some((g) => !S.goals[g.id] && g.check(S));
+  $('#goalDot').hidden = !GOALS.some((g) => !S.goals[g.id] && g.check(S));
+  $('#giftDot').hidden = Date.now() < S.lastDaily + 86400000;
+  $('#lifeDot').hidden = netWorth(S) < REBIRTH_AT;
+  $('#storyDot').hidden = !EPISODES.some((ep) => ep.kind !== 'soon' && (S.bestTier || 0) >= ep.unlockTier && !S.episodes[ep.id]?.done);
   if (tab === 'casino' && !casino.isBusy()) { const r = $('#casinoRoot'); if (r) casino.refreshBet(r); }
 }
 
@@ -243,24 +276,28 @@ function onMarketTick() {
     lastNews = news.text;
     const tk = $('#ticker');
     tk.textContent = news.text;
-    tk.className = 'ticker ' + (news.up ? 'up' : 'down');
+    tk.className = 'ticker-in ' + (news.up ? 'up' : 'down');
+    tk.animate([{ transform: 'translateY(100%)', opacity: 0 }, { transform: 'none', opacity: 1 }], { duration: 350, easing: 'ease-out' });
     if (news.id && (S.stocks[news.id]?.sh || 0) > 0) toast(news.text, news.up ? 'good' : 'bad');
   }
   if (tab === 'market') renderMarket(true);
-  if (modalKind.startsWith('stock:')) stockSheet(modalKind.slice(6), true);
+  if (sheetKind.startsWith('stock:')) stockSheet(sheetKind.slice(6), true);
 }
 
 // ---------------------------------------------------------------- tabs
-function showTab(name) {
+function showTab(name, animate = false) {
   tab = name;
+  const idx = TABS.indexOf(name);
   document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === name));
+  $('#tabInd').style.transform = `translateX(${idx * 100}%)`;
   const p = $('#panel');
   p.scrollTop = 0;
   if (name === 'biz') p.innerHTML = bizHTML();
   if (name === 'market') renderMarket();
   if (name === 'assets') p.innerHTML = assetsHTML();
   if (name === 'casino') p.innerHTML = `<div id="casinoRoot">${casino.html()}</div>`;
-  if (name === 'more') renderMore();
+  if (name === 'story') p.innerHTML = storyHTML();
+  if (animate) { p.classList.remove('enter'); void p.offsetWidth; p.classList.add('enter'); }
   sync();
 }
 
@@ -406,9 +443,7 @@ function stockSheet(id, live = false) {
   const modes = [1, 10, 100, 'max'].map((x) =>
     `<button class="chip ${stockBuyMode === x ? 'on' : ''}" data-act="sMode" data-id="${x}">${x === 'max' ? 'MAX' : '×' + x}</button>`).join('');
   const half = Math.floor(pos.sh / 2);
-  const box = live ? $('#modal .sheet') : openModal('stock:' + id);
   const html = `
-    <button class="x" data-act="close" aria-label="Close">✕</button>
     <div class="stock-head"><span class="row-icon logo">${stockLogo(st.id)}</span>
       <div><div class="sheet-title">${st.name}</div><div class="muted">${st.id}${st.crypto ? ' · crypto' : ''}${st.div ? ` · dividend ${(st.div * 3600 * 100).toFixed(0)}%/h` : ''}</div></div></div>
     <div class="stock-price"><b>${money(m.p)}</b> <span class="${ch >= 0 ? 'up' : 'down'}">${pct(ch)}</span></div>
@@ -424,7 +459,7 @@ function stockSheet(id, live = false) {
       <button class="btn red big" data-act="sSell" data-id="${id}" data-q="${half}" ${half > 0 ? '' : 'disabled'}>Sell half<small>${money(half * m.p)}</small></button>
       <button class="btn red big" data-act="sSell" data-id="${id}" data-q="${pos.sh}" ${pos.sh > 0 ? '' : 'disabled'}>Sell all<small>${money(val)}</small></button>
     </div>`;
-  if (live) { if (box) box.innerHTML = html; } else box.innerHTML = `<div class="sheet stock-sheet">${html}</div>`;
+  if (live) { const box = $('#bsBody'); if (box) box.innerHTML = html; } else openSheet('stock:' + id, '', html);
   const c = $('#bigChart');
   if (c) drawChart(c, m.hist, { fill: true, width: 2.5, pad: 6 });
   sync();
@@ -482,37 +517,47 @@ function assetsHTML() {
 
 // ---------------------------------------------------------------- STORY tab
 function storyHTML() {
-  return '<div class="hint">Every new Trinoko short = a new episode. You decide how it ends.</div>' +
-    EPISODES.map((ep) => {
+  const card = (title, hook, action, cls = '', done = '') => `
+    <div class="ep-card ${cls}">
+      <div class="ep-info">
+        <div class="ep-title">${title}</div>
+        <div class="row-sub">${hook}</div>
+        ${done ? `<div class="ep-done">✔ ${esc(done)}</div>` : ''}
+      </div>
+      ${action}
+    </div>`;
+  return `<div class="sec-head"><h2>Story</h2><span class="muted">One episode per Trinoko short</span></div>` +
+    card('Prologue', 'How it all began: a box, a girl and one flower.', '<button class="btn" data-act="prologue">Watch</button>', 'prologue') +
+    EPISODES.map((ep, i) => {
       const locked = (S.bestTier || 0) < ep.unlockTier;
       const done = S.episodes[ep.id]?.done;
       let action;
       if (ep.kind === 'soon') action = '<span class="tag">Soon</span>';
       else if (locked) action = `<span class="tag">🔒 ${TIERS[ep.unlockTier].name}</span>`;
       else action = `<button class="btn ${done ? '' : 'gold'}" data-act="ep" data-id="${ep.id}">${done ? 'Replay' : '▶ Play'}</button>`;
-      return `
-      <div class="row ${locked || ep.kind === 'soon' ? 'locked' : ''}">
-        <div class="row-info">
-          <div class="ep-title">${ep.title}</div>
-          <div class="row-sub">${ep.hook}</div>
-          ${done ? `<div class="ep-done">✔ ${esc(done)}</div>` : ''}
-        </div>
-        ${action}
-      </div>`;
+      return card(`<span class="ep-num">EP ${i + 1}</span> ${ep.title}`, ep.hook, action, locked || ep.kind === 'soon' ? 'locked' : '', done);
     }).join('');
 }
 
-// ---------------------------------------------------------------- MORE tab
-function renderMore() {
-  const subs = [['story', '🎬 Story'], ['goals', '🎯 Goals'], ['bonus', '🎁 Bonus'], ['top', '🏆 Top'], ['life', '🔄 Life']];
-  const seg = '<div class="seg five">' + subs.map(([id, l]) =>
-    `<button class="${moreSub === id ? 'on' : ''}" data-act="moreSub" data-id="${id}">${l}</button>`).join('') + '</div>';
-  const p = $('#panel');
-  if (moreSub === 'story') p.innerHTML = seg + storyHTML();
-  if (moreSub === 'goals') p.innerHTML = seg + goalsHTML();
-  if (moreSub === 'bonus') { p.innerHTML = seg + bonusHTML(); mountTask(); }
-  if (moreSub === 'top') { p.innerHTML = seg + '<div class="muted center">Loading…</div>'; loadTop(seg); }
-  if (moreSub === 'life') p.innerHTML = seg + lifeHTML();
+// ---------------------------------------------------------------- bottom sheets
+function openSheet(kind, title, body) {
+  sheetKind = kind;
+  const card = $('#bsCard');
+  card.innerHTML = `<div class="bs-grab"></div>
+    <div class="bs-head">${title ? `<h2>${title}</h2>` : '<span></span>'}<button class="x" data-act="closeSheet" aria-label="Close">✕</button></div>
+    <div class="bs-body" id="bsBody">${body}</div>`;
+  $('#bsheet').classList.add('on');
+  sync();
+}
+function closeSheet() {
+  sheetKind = '';
+  $('#bsheet').classList.remove('on');
+}
+function renderSheet(kind) {
+  if (kind === 'goals') return openSheet('goals', '🎯 Goals', goalsHTML());
+  if (kind === 'gifts') { openSheet('gifts', '🎁 Gifts', bonusHTML()); return mountTask(); }
+  if (kind === 'life') return openSheet('life', '⭐ New Life', lifeHTML());
+  if (kind === 'top') { openSheet('top', '🏆 Richest players', '<div class="muted center">Loading…</div>'); return loadTop(); }
 }
 
 function goalsHTML() {
@@ -575,14 +620,14 @@ function lifeHTML() {
   </div>`;
 }
 
-async function loadTop(seg) {
+async function loadTop() {
   const list = await topPlayers(30);
-  if (tab !== 'more' || moreSub !== 'top') return;
-  const p = $('#panel');
-  if (!list) { p.innerHTML = seg + '<div class="card muted">Leaderboard is offline. Try later.</div>'; return; }
-  if (!list.length) { p.innerHTML = seg + '<div class="card muted">Be the first one here!</div>'; return; }
-  p.innerHTML = seg + '<div class="hint">Ranked by net worth</div>' + list.map((r, i) => `
-    <div class="lb ${r.me ? 'me' : ''}">
+  const box = $('#bsBody');
+  if (sheetKind !== 'top' || !box) return;
+  if (!list) { box.innerHTML = '<div class="card muted">Leaderboard is offline. Try later.</div>'; return; }
+  if (!list.length) { box.innerHTML = '<div class="card muted">Be the first one here!</div>'; return; }
+  box.innerHTML = '<div class="hint">Ranked by net worth</div>' + list.map((r, i) => `
+    <div class="lb ${r.me ? 'me' : ''} ${i < 3 ? 'top' + (i + 1) : ''}">
       <span class="rank">${i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</span>
       <span class="lb-name">${esc(r.name || 'Player')}${r.me ? ' (you)' : ''}</span>
       <span class="lb-score">${money(r.score || 0)}</span>
@@ -628,6 +673,9 @@ async function onAction(e) {
       return;
     }
     case 'close': return closeModal();
+    case 'closeSheet': return closeSheet();
+    case 'openSheet': haptic('light'); return renderSheet(id);
+    case 'prologue': return playIntro($('#intro'), () => {});
     case 'bizMode': bizMode = id === 'max' ? 'max' : Number(id); return rerender();
     case 'buyBiz': {
       const b = BUSINESSES.find((x) => x.id === id);
@@ -636,6 +684,8 @@ async function onAction(e) {
       S.money -= cost;
       S.biz[id] = (S.biz[id] || 0) + n;
       haptic('medium');
+      coinBurst(t, $('#heroBtn'), 5);
+      if (S.tut === 2) { S.tut = 9; coach(); toast('Businesses earn money even when you are offline!', 'good'); save(); }
       return rerender();
     }
     case 'buyUpg': {
@@ -652,7 +702,7 @@ async function onAction(e) {
       return rerender();
     }
     case 'stock': return stockSheet(id);
-    case 'sMode': stockBuyMode = id === 'max' ? 'max' : Number(id); return stockSheet(modalKind.slice(6), true);
+    case 'sMode': stockBuyMode = id === 'max' ? 'max' : Number(id); return stockSheet(sheetKind.slice(6), true);
     case 'sBuy': {
       const q = stockQty(id, stockBuyMode);
       if (buyStock(S, id, q)) { haptic('medium'); stockSheet(id, true); if (tab === 'market') renderMarket(true); }
@@ -689,7 +739,8 @@ async function onAction(e) {
       const l = LUXURY.find((x) => x.id === id);
       if (S.lux.includes(id) || S.money < l.cost) return;
       S.money -= l.cost; S.lux.push(id);
-      haptic('heavy'); drawStage(); toast(`${l.icon} ${l.name}! +${l.fame} fame`, 'good');
+      if (l.kind === 'car') S.ride = id;
+      haptic('heavy'); drawStage(); toast(`${l.name}! +${l.fame} fame`, 'good');
       return rerender();
     }
     case 'ride': {
@@ -705,24 +756,24 @@ async function onAction(e) {
       drawStage(); return rerender();
     }
     case 'ep': return playEpisode(id);
-    case 'moreSub': moreSub = id; return rerender();
     case 'claim': {
       const g = GOALS.find((x) => x.id === id);
       if (S.goals[id] || !g.check(S)) return;
       const r = goalReward(g);
       S.goals[id] = 1; earn(r); save(); haptic('heavy');
-      rewardModal(g.text, r);
-      return rerender();
+      coinBurst(t, $('#cashBox'), 10);
+      return renderSheet('goals');
     }
     case 'daily': {
       if (Date.now() < S.lastDaily + 86400000) return;
       const r = minutesOfIncome(20, 200);
       earn(r); S.lastDaily = Date.now(); save(); haptic('heavy');
-      return rewardModal('Daily gift', r);
+      coinBurst(t, $('#cashBox'), 12);
+      return toast(`Daily gift +${money(r)}`, 'good');
     }
     case 'code': return onCode();
     case 'yt': return openLink(YOUTUBE_URL);
-    case 'rebirth': return rebirthModal();
+    case 'rebirth': closeSheet(); return rebirthModal();
   }
 }
 
@@ -891,7 +942,8 @@ function finishEpisode(ep, m, title, sub, first, mult = 1) {
     <div class="muted center">Next episode drops with the next Trinoko short.</div></div>`;
   const done = (k) => {
     earn(r * k); haptic('heavy'); save(); closeModal();
-    if (tab === 'more') rerender();
+    if (tab === 'story') rerender();
+    coinBurst($('#heroBtn'), $('#cashBox'), 12);
     maybeShowInterstitial();
   };
   m.querySelector('#take1').onclick = () => done(1);
@@ -915,8 +967,9 @@ function closeModal() {
 
 function rewardModal(title, amount) {
   const m = openModal('reward');
-  m.innerHTML = `<div class="sheet"><div class="sheet-title">${esc(title)}</div>
-    <div class="reward">+${money(amount)}</div><button class="btn gold big wide" data-act="close">Nice!</button></div>`;
+  m.innerHTML = `<div class="sheet"><div class="burst"></div><div class="sheet-title">${esc(title)}</div>
+    <div class="reward">+${money(amount)}</div><button class="btn gold big wide" id="okR">Nice!</button></div>`;
+  m.querySelector('#okR').onclick = (e) => { coinBurst(e.target, $('#cashBox'), 10); closeModal(); };
 }
 
 function offlineModal(amount, secs) {
@@ -927,19 +980,20 @@ function offlineModal(amount, secs) {
       <button class="btn gold big" id="x2">▶ Collect ×2</button>
       <button class="btn big alt" id="take">Collect</button>
     </div></div>`;
-  m.querySelector('#take').onclick = () => { earn(amount); save(); closeModal(); };
-  m.querySelector('#x2').onclick = async () => { if (await showRewardedAd()) { earn(amount * 2); save(); closeModal(); } };
+  m.querySelector('#take').onclick = (e) => { earn(amount); save(); coinBurst(e.target, $('#cashBox'), 10); closeModal(); };
+  m.querySelector('#x2').onclick = async (e) => { if (await showRewardedAd()) { earn(amount * 2); save(); coinBurst(e.target, $('#cashBox'), 14); closeModal(); } };
 }
 
 function tierModal(ti) {
   if (modalKind) { toast(`NEW LEVEL: ${TIERS[ti].name}!`, 'good'); return; }
   const m = openModal('tierup');
-  m.innerHTML = `<div class="sheet"><div class="sheet-kicker">NEW LEVEL</div>
+  confetti();
+  m.innerHTML = `<div class="sheet"><div class="burst"></div><div class="sheet-kicker">NEW LEVEL</div>
     <div class="sheet-title big">${TIERS[ti].name.toUpperCase()}</div>
     <div class="tier-hero">${heroHTML(ti, 'smug')}</div>
     <button class="btn gold big wide" data-act="close">Let's go</button></div>`;
   haptic('heavy');
-  if (tab === 'market' || tab === 'more') rerender();
+  if (tab === 'market' || tab === 'story') rerender();
 }
 
 function rebirthModal() {
@@ -954,8 +1008,37 @@ function rebirthModal() {
   m.querySelector('#yes').onclick = () => {
     rebirth(stars);
     closeModal(); drawStage(); showTab('biz');
+    confetti(120);
     toast(`New life! ⭐ ${S.stars} stars`, 'good');
   };
 }
+
+// ---------------------------------------------------------------- tutorial
+function coach() {
+  const el = $('#coach');
+  const steps = {
+    1: { target: '#heroBtn', text: 'Tap yourself to hustle for cash!', pos: 'above' },
+    2: { target: '#buy-flowers', text: 'Buy your first business. It earns money for you!', pos: 'above' },
+  };
+  const st = steps[S.tut];
+  document.querySelectorAll('.coach-target').forEach((x) => x.classList.remove('coach-target'));
+  if (!st) { el.className = 'coach'; el.innerHTML = ''; return; }
+  if (S.tut === 2 && tab !== 'biz') showTab('biz');
+  const place = () => {
+    const t = $(st.target);
+    if (!t || !S.tut || S.tut >= 9 || !steps[S.tut]) return;
+    t.classList.add('coach-target');
+    const r = t.getBoundingClientRect(), app = $('#app').getBoundingClientRect();
+    el.className = 'coach on';
+    el.innerHTML = `<div class="coach-bubble">${st.text}</div><div class="coach-hand">👆</div>`;
+    const bubble = el.querySelector('.coach-bubble'), hand = el.querySelector('.coach-hand');
+    hand.style.left = (r.left - app.left + r.width / 2) + 'px';
+    hand.style.top = (r.top - app.top + r.height * 0.55) + 'px';
+    bubble.style.top = (S.tut === 1 ? Math.max(8, r.top - app.top - 10) : Math.max(8, r.top - app.top - 62)) + 'px';
+  };
+  requestAnimationFrame(place);
+  setTimeout(place, 400);
+}
+window.addEventListener('resize', () => { if (S.tut && S.tut < 9) coach(); });
 
 boot();

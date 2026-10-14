@@ -1,0 +1,45 @@
+rules_version = '2';
+
+// Paste this whole file into Firebase Console → Firestore → Rules → Publish.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Leaderboard: everyone can read; a player can only write their own row.
+    match /leaderboard/{uid} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['name', 'score', 'updatedAt'])
+        && request.resource.data.name is string
+        && request.resource.data.name.size() <= 32
+        && request.resource.data.score is number
+        && request.resource.data.score >= 0
+        && request.resource.data.score < 1e18;
+    }
+
+    // Promo codes: added by you in the console. Players can check one code by name,
+    // but cannot list all codes or change them.
+    match /codes/{code} {
+      allow get: if true;
+      allow list, write: if false;
+    }
+
+    // Episode votes: { a: number, b: number }. Each write may add exactly one vote.
+    match /votes/{episode} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['a', 'b'])
+        && request.resource.data.a + request.resource.data.b == 1;
+      allow update: if request.auth != null
+        && request.resource.data.keys().hasOnly(['a', 'b'])
+        && request.resource.data.a >= resource.data.a
+        && request.resource.data.b >= resource.data.b
+        && request.resource.data.a + request.resource.data.b == resource.data.a + resource.data.b + 1;
+    }
+
+    // Everything else stays closed.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

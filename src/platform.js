@@ -51,10 +51,12 @@ function pickNewest(a, b) {
   } catch (e) { return a || b; }
 }
 
-export function writeSave(json) {
+// Full save goes to localStorage. Telegram CloudStorage allows 4096 chars per key,
+// so the cloud copy is a slim version (no price history).
+export function writeSave(json, slim = json) {
   try { localStorage.setItem(KEY, json); } catch (e) {}
-  if (hasCloud()) {
-    try { tg.CloudStorage.setItem(KEY, json, () => {}); } catch (e) {}
+  if (hasCloud() && slim.length < 4096) {
+    try { tg.CloudStorage.setItem(KEY, slim, () => {}); } catch (e) {}
   }
 }
 

@@ -44,18 +44,23 @@ export function sceneSVG({ tier = 0, sea = false } = {}) {
     : `<circle cx="326" cy="${day ? 88 : 104}" r="${day ? 18 : 24}" fill="${day ? '#ffe14a' : '#ffd36b'}" stroke="${INK}" stroke-width="3"/>`;
   const cloud = (x, y, sc) => `<g class="cloud" style="--d:${30 + sc * 20}s"><g transform="translate(${x} ${y}) scale(${sc})">
     <path d="M0 20 Q0 6 14 8 Q18 -4 34 2 Q46 -6 56 6 Q72 6 70 20 Z" fill="#fff" opacity="${night ? 0.25 : 0.9}" stroke="${INK}" stroke-width="${night ? 0 : 3}"/></g></g>`;
-  const far = skyline(196, night ? '#2a1a66' : day ? '#8fb3e8' : '#6a3fb0', 7, 16, 30, 90, false);
-  const near = skyline(204, night ? '#1a1040' : day ? '#5a78b8' : '#3d2380', 3, 14, 20, 60, true, sea ? 200 : 420);
-  const water = sea ? `<rect x="230" y="168" width="200" height="40" fill="#3fa9f5"/>
-    <path d="M230 168 H430" stroke="${INK}" stroke-width="3"/>
-    <path d="M250 182 q8 -4 16 0 M300 190 q8 -4 16 0 M350 180 q8 -4 16 0" stroke="#bfe6ff" stroke-width="3" fill="none" stroke-linecap="round"/>` : '';
+  const far = skyline(196, night ? '#2a1a66' : day ? '#8fb3e8' : '#6a3fb0', 7, 16, 30, 90, false, sea ? 175 : 420);
+  const near = skyline(204, night ? '#1a1040' : day ? '#5a78b8' : '#3d2380', 3, 14, 20, 60, true, sea ? 165 : 420);
+  // Sea: open water from the horizon down to the promenade, city stays on the left shore.
+  const water = sea ? `
+    <rect x="170" y="150" width="240" height="56" fill="${night ? '#1d3a8a' : '#3fa9f5'}"/>
+    <path d="M170 150 H410" stroke="${INK}" stroke-width="2.5"/>
+    <path d="M300 156 h52 M310 164 h32 M318 172 h16" stroke="${night ? '#fff6d0' : '#fff3c4'}" stroke-width="3" stroke-linecap="round" opacity=".7"/>
+    <path d="M190 170 q8 -4 16 0 M232 186 q8 -4 16 0 M270 162 q8 -4 16 0 M368 186 q8 -4 16 0" stroke="#bfe6ff" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <rect x="166" y="186" width="244" height="4" fill="#e6e4ef" stroke="${INK}" stroke-width="2"/>
+    ${Array.from({ length: 16 }, (_, i) => `<rect x="${170 + i * 15}" y="188" width="3" height="16" fill="#e6e4ef" stroke="${INK}" stroke-width="1.5"/>`).join('')}` : '';
   return `<svg viewBox="0 0 400 260" preserveAspectRatio="xMidYMax slice" class="scene-bg" aria-hidden="true">
     <defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${top}"/><stop offset="1" stop-color="${bottom}"/></linearGradient></defs>
     <rect width="400" height="260" fill="url(#${gid})"/>
     ${stars}${sun}
     ${cloud(20, 30, 0.8)}${cloud(180, 14, 0.6)}${cloud(300, 80, 0.7)}
+    ${sea ? water : ''}
     ${far}${near}
-    ${water}
     <rect x="0" y="204" width="400" height="10" fill="#b8bccb" stroke="${INK}" stroke-width="3"/>
     <rect x="0" y="214" width="400" height="46" fill="#3a3550"/>
     <path d="M0 238 H400" stroke="#ffe14a" stroke-width="4" stroke-dasharray="22 18" class="road-dash"/>

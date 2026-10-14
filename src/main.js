@@ -317,6 +317,7 @@ function showTab(name, animate = false) {
   tab = name;
   const idx = TABS.indexOf(name);
   document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.tab === name));
+  $('#app').classList.toggle('compact', name !== 'biz');
   $('#tabInd').style.transform = `translateX(${idx * 100}%)`;
   const p = $('#panel');
   p.scrollTop = 0;

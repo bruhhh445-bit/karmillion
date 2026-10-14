@@ -78,7 +78,9 @@ export async function showRewardedAd() {
   try {
     rewardedCtl ??= window.Adsgram.init({ blockId: ADSGRAM_REWARDED_ID });
     const res = await rewardedCtl.show();
-    return res?.done !== false; // show() resolves only when the ad was watched
+    const ok = res?.done !== false; // show() resolves only when the ad was watched
+    if (ok) window.dispatchEvent(new CustomEvent('km:ad', { detail: 'rewarded' }));
+    return ok;
   } catch (e) {
     return false;
   }

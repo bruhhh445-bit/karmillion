@@ -37,6 +37,21 @@ service cloud.firestore {
         && request.resource.data.a + request.resource.data.b == resource.data.a + resource.data.b + 1;
     }
 
+    // Daily stats: stats/{YYYY-MM-DD} -> { players, newPlayers }.
+    // Players can only add +1; nobody can read it from the game (you see it in the console).
+    match /stats/{day} {
+      allow read: if false;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['players', 'newPlayers'])
+        && request.resource.data.players == 1
+        && request.resource.data.get('newPlayers', 1) == 1;
+      allow update: if request.auth != null
+        && request.resource.data.keys().hasOnly(['players', 'newPlayers'])
+        && request.resource.data.players == resource.data.players + 1
+        && (request.resource.data.get('newPlayers', 0) == resource.data.get('newPlayers', 0)
+            || request.resource.data.get('newPlayers', 0) == resource.data.get('newPlayers', 0) + 1);
+    }
+
     // Everything else stays closed.
     match /{document=**} {
       allow read, write: if false;

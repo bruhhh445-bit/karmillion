@@ -17,7 +17,7 @@ import { S, loadInto, earn, save, rebirth } from './state.js';
 import {
   initTelegram, inTelegram, playerName, haptic, loadSave, showRewardedAd, maybeShowInterstitial, tg,
 } from './platform.js';
-import { initCloud, submitScore, topPlayers, redeemCode, castVote, getVotes } from './cloud.js';
+import { initCloud, submitScore, topPlayers, redeemCode, castVote, getVotes, track, countDailyPlayer } from './cloud.js';
 import { OFFLINE_CAP_HOURS, BOOST_MINUTES, ADSGRAM_TASK_ID, YOUTUBE_URL } from './config.js';
 import { EPISODES } from './episodes.js';
 import { heroHTML, girlHTML, richGuyHTML } from './hero.js';
@@ -55,11 +55,15 @@ async function boot() {
   initTelegram();
   loadInto(await loadSave());
   if (S.introDone === undefined) S.introDone = S.lifetimeEarned > 0 || Object.keys(S.biz).length > 0;
+  const firstVisit = !S.introDone && !S.lifetimeEarned;
   renderShell();
   showTab('biz');
   initCloud();
+  countDailyPlayer(firstVisit);
+  track('session_start_game', { tier: S.tier, lives: S.lives || 0 });
   if (!S.introDone) {
-    playIntro($('#intro'), () => { S.introDone = true; S.tut = 1; save(); coach(); });
+    track('intro_start');
+    playIntro($('#intro'), () => { S.introDone = true; S.tut = 1; save(); coach(); track('intro_done'); });
   } else if (S.tut && S.tut < 9) coach();
 
   const away = Math.min((Date.now() - (S.lastSeen || Date.now())) / 1000, OFFLINE_CAP_HOURS * 3600);
@@ -721,7 +725,7 @@ async function onAction(e) {
       S.biz[id] = (S.biz[id] || 0) + n;
       haptic('medium');
       coinBurst(t, $('#heroBtn'), 5);
-      if (S.tut === 2) { S.tut = 9; coach(); toast('Businesses earn money even when you are offline!', 'good'); save(); }
+      if (S.tut === 2) { S.tut = 9; coach(); toast('Businesses earn money even when you are offline!', 'good'); save(); track('tutorial_complete'); }
       return rerender();
     }
     case 'buyUpg': {
@@ -1048,6 +1052,7 @@ function offlineModal(amount, secs) {
 }
 
 function tierModal(ti) {
+  track('level_up', { level: ti + 1, tier: TIERS[ti].name });
   const bonus = tierBonus(ti);
   if (modalKind) { earn(bonus); toast(`NEW LEVEL: ${TIERS[ti].name}! +${money(bonus)}`, 'good'); return; }
   const m = openModal('tierup');
@@ -1119,5 +1124,6 @@ function coach() {
   setTimeout(place, 400);
 }
 window.addEventListener('resize', () => { if (S.tut && S.tut < 9) coach(); });
+window.addEventListener('km:ad', (e) => track('ad_watched', { type: e.detail }));
 
 boot();

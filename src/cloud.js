@@ -3,11 +3,12 @@ import { initializeApp } from 'firebase/app';
 import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 import {
   getFirestore, doc, getDoc, setDoc, collection, query, orderBy, limit, getDocs,
-  runTransaction, serverTimestamp,
+  runTransaction, serverTimestamp, increment,
 } from 'firebase/firestore';
+import { getAnalytics, isSupported, logEvent } from 'firebase/analytics';
 import { FIREBASE_CONFIG } from './config.js';
 
-let db = null, auth = null, uid = null;
+let db = null, auth = null, uid = null, analytics = null;
 let readyPromise = null;
 
 export function initCloud() {
@@ -15,6 +16,7 @@ export function initCloud() {
   readyPromise = new Promise((resolve) => {
     try {
       const app = initializeApp(FIREBASE_CONFIG);
+      isSupported().then((ok) => { if (ok) analytics = getAnalytics(app); }).catch(() => {});
       db = getFirestore(app);
       auth = getAuth(app);
       onAuthStateChanged(auth, (user) => {
@@ -27,6 +29,25 @@ export function initCloud() {
     }
   });
   return readyPromise;
+}
+
+// Google Analytics event (no-op if analytics is unavailable).
+export function track(name, params = {}) {
+  try { if (analytics) logEvent(analytics, name, params); } catch (e) {}
+}
+
+// Daily active players: stats/{YYYY-MM-DD} -> { players, newPlayers }.
+// Each device counts itself once per day (Moscow date).
+export async function countDailyPlayer(isNew) {
+  const day = new Date(Date.now() + 3 * 3600000).toISOString().slice(0, 10);
+  let last = null;
+  try { last = localStorage.getItem('dau_day'); } catch (e) {}
+  if (last === day) return;
+  if (!(await initCloud()) || !uid) return;
+  try {
+    await setDoc(doc(db, 'stats', day), { players: increment(1), ...(isNew ? { newPlayers: increment(1) } : {}) }, { merge: true });
+    try { localStorage.setItem('dau_day', day); } catch (e) {}
+  } catch (e) { /* rules not published yet */ }
 }
 
 export async function submitScore(name, score) {

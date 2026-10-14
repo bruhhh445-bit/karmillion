@@ -8,6 +8,7 @@ export const FIREBASE_CONFIG = {
   storageBucket: 'karmillion-9f827.firebasestorage.app',
   messagingSenderId: '1080769065740',
   appId: '1:1080769065740:web:5da05e768198d686de8f29',
+  measurementId: 'G-XWV5R8YLYSY',
 };
 
 // Adsgram block IDs from partner.adsgram.ai (public, not secret).
